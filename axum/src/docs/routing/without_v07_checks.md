@@ -1,8 +1,8 @@
-Turn off checks for compatibility with route matching syntax from 0.7.
+关闭与 0.7 路由匹配语法兼容性的检查。
 
-This allows usage of paths starting with a colon `:` or an asterisk `*` which are otherwise prohibited.
+这允许使用以冒号 `:` 或星号 `*` 开头的路径，否则这些是被禁止的。
 
-# Example
+# 示例
 
 ```rust
 use axum::{
@@ -15,13 +15,14 @@ let app = Router::<()>::new()
     .route("/:colon", get(|| async {}))
     .route("/*asterisk", get(|| async {}));
 
-// Our app now accepts
+// 我们的应用现在接受
+
 // - GET /:colon
 // - GET /*asterisk
 # let _: Router = app;
 ```
 
-Adding such routes without calling this method first will panic.
+首先调用此方法而不添加这样的路由会导致 panic。
 
 ```rust,should_panic
 use axum::{
@@ -29,15 +30,15 @@ use axum::{
     Router,
 };
 
-// This panics...
+// 这会 panic...
 let app = Router::<()>::new()
     .route("/:colon", get(|| async {}));
 ```
 
-# Merging
+# 合并
 
-When two routers are merged, v0.7 checks are disabled for route registrations on the resulting router if both of the two routers had them also disabled.
+当两个路由器合并时，如果两个路由器也都禁用了 v0.7 检查，则在结果路由器上禁用路由注册的 v0.7 检查。
 
-# Nesting
+# 嵌套
 
-Each router needs to have the checks explicitly disabled. Nesting a router with the checks either enabled or disabled has no effect on the outer router.
+每个路由器都需要显式禁用检查。嵌套一个启用了或禁用了检查的路由器对外部路由器没有影响。

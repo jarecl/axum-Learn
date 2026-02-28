@@ -1,13 +1,10 @@
-Types and traits for extracting data from requests.
+从请求中提取数据的类型和 trait。
 
-# Intro
+# 简介
 
-A handler function is an async function that takes any number of
-"extractors" as arguments. An extractor is a type that implements
-[`FromRequest`] or [`FromRequestParts`].
+处理器函数是一个接受零个或多个"提取器"作为参数的 async 函数。提取器是实现 [`FromRequest`] 或 [`FromRequestParts`] 的类型。
 
-For example, [`Json`] is an extractor that consumes the request body and
-deserializes it as JSON into some target type:
+例如，[`Json`] 是一个提取器，它消费请求体并将其反序列化为 JSON 到某个目标类型：
 
 ```rust,no_run
 use axum::{
@@ -32,9 +29,9 @@ let app = Router::new().route("/users", post(create_user));
 # let _: Router = app;
 ```
 
-# Common extractors
+# 常用提取器
 
-Some commonly used extractors are:
+一些常用的提取器包括：
 
 ```rust,no_run
 use axum::{
@@ -47,30 +44,29 @@ use axum::{
 use serde_json::Value;
 use std::collections::HashMap;
 
-// `Path` gives you the path parameters and deserializes them. See its docs for
-// more details
+// `Path` 给你路径参数并反序列化它们。查看其文档了解更多细节
 async fn path(Path(user_id): Path<u32>) {}
 
-// `Query` gives you the query parameters and deserializes them.
+// `Query` 给你查询参数并反序列化它们。
 async fn query(Query(params): Query<HashMap<String, String>>) {}
 
-// `HeaderMap` gives you all the headers
+// `HeaderMap` 给你所有的头部
 async fn headers(headers: HeaderMap) {}
 
-// `String` consumes the request body and ensures it is valid utf-8
+// `String` 消费请求体并确保它是有效的 utf-8
 async fn string(body: String) {}
 
-// `Bytes` gives you the raw request body
+// `Bytes` 给你原始请求体
 async fn bytes(body: Bytes) {}
 
-// We've already seen `Json` for parsing the request body as json
+// 我们已经见过用于将请求体解析为 json 的 `Json`
 async fn json(Json(payload): Json<Value>) {}
 
-// `Request` gives you the whole request for maximum control
+// `Request` 给你整个请求以获得最大控制
 async fn request(request: Request) {}
 
-// `Extension` extracts data from "request extensions"
-// This is commonly used to share state with handlers
+// `Extension` 从"请求扩展"中提取数据
+// 这常用于与处理器共享状态
 async fn extension(Extension(state): Extension<State>) {}
 
 #[derive(Clone)]
@@ -87,9 +83,9 @@ let app = Router::new()
 # let _: Router = app;
 ```
 
-# Applying multiple extractors
+# 应用多个提取器
 
-You can also apply multiple extractors:
+你也可以应用多个提取器：
 
 ```rust,no_run
 use axum::{
@@ -117,17 +113,13 @@ async fn get_user_things(
 # let _: Router = app;
 ```
 
-# The order of extractors
+# 提取器的顺序
 
-Extractors always run in the order of the function parameters that is from
-left to right.
+提取器总是按照函数参数的顺序运行，即从左到右。
 
-The request body is an asynchronous stream that can only be consumed once.
-Therefore you can only have one extractor that consumes the request body. axum
-enforces this by requiring such extractors to be the _last_ argument your
-handler takes.
+请求体是一个只能消费一次的异步流。因此你只能有一个消费请求体的提取器。axum 通过要求此类提取器成为你的处理器接受的_最后_一个参数来强制执行这一点。
 
-For example
+例如
 
 ```rust
 use axum::{extract::State, http::{Method, HeaderMap}};
@@ -137,13 +129,13 @@ use axum::{extract::State, http::{Method, HeaderMap}};
 # }
 
 async fn handler(
-    // `Method` and `HeaderMap` don't consume the request body so they can
-    // put anywhere in the argument list (but before `body`)
+    // `Method` 和 `HeaderMap` 不消费请求体，所以它们可以
+    // 放在参数列表的任何位置（但在 `body` 之前）
     method: Method,
     headers: HeaderMap,
-    // `State` is also an extractor so it needs to be before `body`
+    // `State` 也是一个提取器，所以它需要在 `body` 之前
     State(state): State<AppState>,
-    // `String` consumes the request body and thus must be the last extractor
+    // `String` 消费请求体，因此必须是最后一个提取器
     body: String,
 ) {
     // ...
@@ -152,13 +144,13 @@ async fn handler(
 # let _: axum::routing::MethodRouter<AppState> = axum::routing::get(handler);
 ```
 
-We get a compile error if `String` isn't the last extractor:
+如果 `String` 不是最后一个提取器，我们会得到编译错误：
 
 ```rust,compile_fail
 use axum::http::Method;
 
 async fn handler(
-    // this doesn't work since `String` must be the last argument
+    // 这不起作用，因为 `String` 必须是最后一个参数
     body: String,
     method: Method,
 ) {
@@ -168,7 +160,7 @@ async fn handler(
 # let _: axum::routing::MethodRouter = axum::routing::get(handler);
 ```
 
-This also means you cannot consume the request body twice:
+这也意味着你不能消费两次请求体：
 
 ```rust,compile_fail
 use axum::Json;
@@ -178,8 +170,8 @@ use serde::Deserialize;
 struct Payload {}
 
 async fn handler(
-    // `String` and `Json` both consume the request body
-    // so they cannot both be used
+    // `String` 和 `Json` 都消费请求体
+    // 所以它们不能同时使用
     string_body: String,
     json_body: Json<Payload>,
 ) {
@@ -189,14 +181,11 @@ async fn handler(
 # let _: axum::routing::MethodRouter = axum::routing::get(handler);
 ```
 
-axum enforces this by requiring the last extractor implements [`FromRequest`]
-and all others implement [`FromRequestParts`].
+axum 通过要求最后一个提取器实现 [`FromRequest`] 而其他所有提取器实现 [`FromRequestParts`] 来强制执行这一点。
 
-# Handling extractor rejections
+# 处理提取器拒绝
 
-If you want to handle the case of an extractor failing within a specific
-handler, you can wrap it in `Result`, with the error being the rejection type
-of the extractor:
+如果你想在特定处理器内处理提取器失败的情况，可以将其包装在 `Result` 中，错误为提取器的拒绝类型：
 
 ```rust,no_run
 use axum::{
@@ -209,24 +198,24 @@ use serde_json::Value;
 async fn create_user(payload: Result<Json<Value>, JsonRejection>) {
     match payload {
         Ok(payload) => {
-            // We got a valid JSON payload
+            // 我们获得了有效的 JSON 负载
         }
         Err(JsonRejection::MissingJsonContentType(_)) => {
-            // Request didn't have `Content-Type: application/json`
-            // header
+            // 请求没有 `Content-Type: application/json`
+            // 头部
         }
         Err(JsonRejection::JsonDataError(_)) => {
-            // Couldn't deserialize the body into the target type
+            // 无法将请求体反序列化到目标类型
         }
         Err(JsonRejection::JsonSyntaxError(_)) => {
-            // Syntax error in the body
+            // 请求体中有语法错误
         }
         Err(JsonRejection::BytesRejection(_)) => {
-            // Failed to extract the request body
+            // 提取请求体失败
         }
         Err(_) => {
-            // `JsonRejection` is marked `#[non_exhaustive]` so match must
-            // include a catch-all case.
+            // `JsonRejection` 被标记为 `#[non_exhaustive]`，所以 match 必须
+            // 包含一个 catch-all 情况。
         }
     }
 }
@@ -235,16 +224,11 @@ let app = Router::new().route("/users", post(create_user));
 # let _: Router = app;
 ```
 
-# Optional extractors
+# 可选提取器
 
-Some extractors implement [`OptionalFromRequestParts`] in addition to
-[`FromRequestParts`], or [`OptionalFromRequest`] in addition to [`FromRequest`].
+一些提取器除了实现 [`FromRequestParts`] 之外还实现 [`OptionalFromRequestParts`]，或除了实现 [`FromRequest`] 之外还实现 [`OptionalFromRequest`]。
 
-These extractors can be used inside of `Option`. It depends on the particular
-`OptionalFromRequestParts` or `OptionalFromRequest` implementation what this
-does: For example for `TypedHeader` from axum-extra, you get `None` if the
-header you're trying to extract is not part of the request, but if the header
-is present and fails to parse, the request is rejected.
+这些提取器可以在 `Option` 内使用。这取决于特定的 `OptionalFromRequestParts` 或 `OptionalFromRequest` 实现。例如，对于 axum-extra 中的 `TypedHeader`，如果你尝试提取的头部不在请求中，你会得到 `None`，但如果头部存在且解析失败，请求将被拒绝。
 
 ```rust,no_run
 use axum::{routing::post, Router};
@@ -253,9 +237,9 @@ use serde_json::Value;
 
 async fn foo(user_agent: Option<TypedHeader<UserAgent>>) {
     if let Some(TypedHeader(user_agent)) = user_agent {
-        // The client sent a user agent
+        // 客户端发送了用户代理
     } else {
-        // No user agent header
+        // 没有用户代理头部
     }
 }
 
@@ -263,29 +247,19 @@ let app = Router::new().route("/foo", post(foo));
 # let _: Router = app;
 ```
 
-# Customizing extractor responses
+# 自定义提取器响应
 
-If an extractor fails it will return a response with the error and your
-handler will not be called. To customize the error response you have two 
-options:
+如果提取器失败，它将返回带有错误的响应，而不会调用你的处理器。要自定义错误响应，你有两个选择：
 
-1. Use `Result<T, T::Rejection>` as your extractor like shown in
-   ["Handling extractor rejections"](#handling-extractor-rejections).
-   This works well if you're only using the extractor in a single handler.
-2. Create your own extractor that in its [`FromRequest`] implementation calls
-   one of axum's built in extractors but returns a different response for
-   rejections. See the [customize-extractor-error] example for more details.
+1. 使用 `Result<T, T::Rejection>` 作为你的提取器，如 ["处理提取器拒绝"](#handling-extractor-rejections) 所示。
+   如果你在单个处理器中仅使用该提取器，这很有效。
+2. 创建你自己的提取器，在其 [`FromRequest`] 实现中调用 axum 的内置提取器之一，但对于拒绝返回不同的响应。查看 [customize-extractor-error] 示例了解更多细节。
 
-# Accessing inner errors
+# 访问内部错误
 
-axum's built-in extractors don't directly expose the inner error. This gives us
-more flexibility and allows us to change internal implementations without
-breaking the public API.
+axum 的内置提取器不直接暴露内部错误。这给了我们更多的灵活性，并允许我们在不破坏公共 API 的情况下更改内部实现。
 
-For example that means while [`Json`] is implemented using [`serde_json`] it
-doesn't directly expose the [`serde_json::Error`] that's contained in
-[`JsonRejection::JsonDataError`]. However it is still possible to access via
-methods from [`std::error::Error`]:
+例如，这意味着虽然 [`Json`] 是使用 [`serde_json`] 实现的，但它不直接包含在 [`JsonRejection::JsonDataError`] 中的 [`serde_json::Error`]。但是仍然可以通过 [`std::error::Error`] 的方法访问：
 
 ```rust
 use std::error::Error;
@@ -300,7 +274,7 @@ async fn handler(
     result: Result<Json<Value>, JsonRejection>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
     match result {
-        // if the client sent valid JSON then we're good
+        // 如果客户端发送了有效的 JSON，我们就可以
         Ok(Json(payload)) => Ok(Json(json!({ "payload": payload }))),
 
         Err(err) => match err {
@@ -310,7 +284,7 @@ async fn handler(
             JsonRejection::JsonSyntaxError(err) => {
                 Err(serde_json_error_response(err))
             }
-            // handle other rejections from the `Json` extractor
+            // 处理来自 `Json` 提取器的其他拒绝
             JsonRejection::MissingJsonContentType(_) => Err((
                 StatusCode::BAD_REQUEST,
                 "Missing `Content-Type: application/json` header".to_string(),
@@ -319,7 +293,7 @@ async fn handler(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to buffer request body".to_string(),
             )),
-            // we must provide a catch-all case since `JsonRejection` is marked
+            // 我们必须提供一个 catch-all 情况，因为 `JsonRejection` 被标记为
             // `#[non_exhaustive]`
             _ => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -329,16 +303,17 @@ async fn handler(
     }
 }
 
-// attempt to extract the inner `serde_path_to_error::Error<serde_json::Error>`,
-// if that succeeds we can provide a more specific error.
+// 尝试提取内部 `serde_path_to_error::Error<serde_json::Error>`，
+// 如果成功，我们可以提供更具体的错误。
 //
-// `Json` uses `serde_path_to_error` so the error will be wrapped in `serde_path_to_error::Error`.
+// `Json` 使用 `serde_path_to_error`，所以错误将被包装在 `serde_path_to_error::Error` 中。
 fn serde_json_error_response<E>(err: E) -> (StatusCode, String)
 where
     E: Error + 'static,
 {
     if let Some(err) = find_error_source::<serde_path_to_error::Error<serde_json::Error>>(&err) {
-        let serde_json_err = err.inner();
+        let
+ serde_json_err = err.inner();
         (
             StatusCode::BAD_REQUEST,
             format!(
@@ -352,8 +327,8 @@ where
     }
 }
 
-// attempt to downcast `err` into a `T` and if that fails recursively try and
-// downcast `err`'s source
+// 尝试将 `err` 向下转换为 `T`，如果失败，递归尝试向下转换
+// `err` 的 source
 fn find_error_source<'a, T>(err: &'a (dyn Error + 'static)) -> Option<&'a T>
 where
     T: Error + 'static,
@@ -366,39 +341,35 @@ where
         None
     }
 }
-# 
+#
 # #[tokio::main]
 # async fn main() {
 #     use axum::extract::FromRequest;
-# 
+#
 #     let req = axum::http::Request::builder()
 #         .header("content-type", "application/json")
 #         .body(axum::body::Body::from("{"))
 #         .unwrap();
-# 
+#
 #     let err = match Json::<serde_json::Value>::from_request(req, &()).await.unwrap_err() {
 #         JsonRejection::JsonSyntaxError(err) => err,
 #         _ => panic!(),
 #     };
-# 
+#
 #     let (_, body) = serde_json_error_response(err);
 #     assert_eq!(body, "Invalid JSON at line 1 column 1");
 # }
 ```
 
-Note that while this approach works it might break in the future if axum changes
-its implementation to use a different error type internally. Such changes might
-happen without major breaking versions.
+请注意，虽然这种方法有效，但如果 axum 在未来更改其内部实现使用不同的错误类型，它可能会可能中断。这种更改可能在非主要破坏性版本中发生。
 
-# Defining custom extractors
+# 定义自定义提取器
 
-You can also define your own extractors by implementing either
-[`FromRequestParts`] or [`FromRequest`].
+你也可以通过实现 [`FromRequestParts`] 或 [`FromRequest`] 来定义自己的提取器。
 
-## Implementing `FromRequestParts`
+## 实现 `FromRequestParts`
 
-Implement `FromRequestParts` if your extractor doesn't need access to the
-request body:
+如果你的提取器不需要访问请求体，实现 `FromRequestParts`：
 
 ```rust,no_run
 use axum::{
@@ -437,9 +408,9 @@ let app = Router::new().route("/foo", get(handler));
 # let _: Router = app;
 ```
 
-## Implementing `FromRequest`
+## 实现 `FromRequest`
 
-If your extractor needs to consume the request body you must implement [`FromRequest`]
+如果你的提取器需要消费请求体，你必须实现 [`FromRequest`]
 
 ```rust,no_run
 use axum::{
@@ -468,7 +439,7 @@ where
             .await
             .map_err(IntoResponse::into_response)?;
 
-        // do validation...
+        // 做验证...
 
         Ok(Self(body))
     }
@@ -482,11 +453,9 @@ let app = Router::new().route("/foo", get(handler));
 # let _: Router = app;
 ```
 
-## Cannot implement both `FromRequest` and `FromRequestParts`
+## 不能同时实现 `FromRequest` 和 `FromRequestParts`
 
-Note that you will make your extractor unusable by implementing both
-`FromRequest` and `FromRequestParts` directly for the same type, unless it is
-wrapping another extractor:
+请注意，通过为同一类型直接实现 `FromRequest` 和 `FromRequestParts` 会导致你的提取器不可用，除非它包装了另一个提取器：
 
 ```rust,compile_fail
 use axum::{
@@ -498,10 +467,10 @@ use axum::{
 };
 use std::convert::Infallible;
 
-// Some extractor that doesn't wrap another extractor
+// 不包装另一个提取器的提取器
 struct MyExtractor;
 
-// `MyExtractor` implements both `FromRequest`
+// `MyExtractor` 实现了 `FromRequest`
 impl<S> FromRequest<S> for MyExtractor
 where
     S: Send + Sync,
@@ -514,7 +483,7 @@ where
     }
 }
 
-// and `FromRequestParts`
+// 和 `FromRequestParts`
 impl<S> FromRequestParts<S> for MyExtractor
 where
     S: Send + Sync,
@@ -529,22 +498,21 @@ where
 
 let app = Router::new().route(
     "/",
-    // This fails when we go to actually use `MyExtractor` in a handler function.
-    // This is due to a limit in Rust's type system.
+    // 当我们在处理器函数中实际使用 `MyExtractor` 时会失败。
+    // 这是由于 Rust 类型系统的限制。
     //
-    // The workaround is to implement either `FromRequest` or `FromRequestParts`
-    // but not both, if your extractor doesn't wrap another extractor.
+    // 解决方法是为你的提取器实现 `FromRequest` 或 `FromRequestParts`
+    // 但不能同时实现，如果你的提取器不包装另一个提取器。
     //
-    // See "Wrapping extractors" for how to wrap other extractors.
+    // 查看"包装提取器"了解如何包装其他提取器。
     get(|_: MyExtractor| async {}),
 );
 # let _: Router = app;
 ```
 
-# Accessing other extractors in `FromRequest` or `FromRequestParts` implementations
+# 在 `FromRequest` 或 `FromRequestParts` 实现中访问其他提取器
 
-When defining custom extractors you often need to access another extractor
-in your implementation.
+定义自定义提取器时，你经常需要在实现中访问另一个提取器。
 
 ```rust
 use axum::{
@@ -571,18 +539,19 @@ where
     type Rejection = Response;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        // You can either call them directly...
+        // 你可以直接调用它们...
         let headers = HeaderMap::from_request_parts(parts, state)
             .await
-            .map_err(|err| match err {})?;
+            .map
+_err(|err| match err {})?;
 
-        // ... or use `extract` / `extract_with_state` from `RequestExt` / `RequestPartsExt`
+        // ... 或者从 `RequestExt` / `RequestPartsExt` 使用 `extract` / `extract_with_state`
         use axum::RequestPartsExt;
         let Extension(state) = parts.extract::<Extension<State>>()
             .await
             .map_err(|err| err.into_response())?;
 
-        unimplemented!("actually perform the authorization")
+        unimplemented!("actually perform authorization")
     }
 }
 
@@ -596,19 +565,15 @@ let app = Router::new().route("/", get(handler)).layer(Extension(state));
 # let _: Router = app;
 ```
 
-# Request body limits
+# 请求体限制
 
-For security reasons, [`Bytes`] will, by default, not accept bodies larger than
-2MB. This also applies to extractors that uses [`Bytes`] internally such as
-`String`, [`Json`], and [`Form`].
+出于安全原因，[`Bytes`] 默认不接受大于 2MB 的请求体。这也适用于内部使用 [`Bytes`] 的提取器，如 `String`、[`Json`] 和 [`[Form`]。
 
-For more details, including how to disable this limit, see [`DefaultBodyLimit`].
+有关更多细节，包括如何禁用此限制，请参阅 [`DefaultBodyLimit`]。
 
-# Wrapping extractors
+# 包装提取器
 
-If you want to write an extractor that generically wraps another extractor
-(that may or may not consume the request body) you should implement both
-[`FromRequest`] and [`FromRequestParts`]:
+如果你想编写一个通用包装另一个提取器（可能消费也可能不消费请求体）的提取器，你应该同时实现 [`FromRequest`] 和 [`FromRequestParts`]：
 
 ```rust
 use axum::{
@@ -620,13 +585,13 @@ use axum::{
 };
 use std::time::{Instant, Duration};
 
-// an extractor that wraps another and measures how long time it takes to run
+// 包装另一个并测量运行时间的提取器
 struct Timing<E> {
     extractor: E,
     duration: Duration,
 }
 
-// we must implement both `FromRequestParts`
+// 我们必须实现 `FromRequestParts`
 impl<S, T> FromRequestParts<S> for Timing<T>
 where
     S: Send + Sync,
@@ -645,7 +610,7 @@ where
     }
 }
 
-// and `FromRequest`
+// 和 `FromRequest`
 impl<S, T> FromRequest<S> for Timing<T>
 where
     S: Send + Sync,
@@ -665,20 +630,17 @@ where
 }
 
 async fn handler(
-    // this uses the `FromRequestParts` impl
+    // 这使用 `FromRequestParts` 实现
     _: Timing<HeaderMap>,
-    // this uses the `FromRequest` impl
+    // 这使用 `FromRequest` 实现
     _: Timing<String>,
 ) {}
 # let _: axum::routing::MethodRouter = axum::routing::get(handler);
 ```
 
-# Logging rejections
+# 记录拒绝
 
-All built-in extractors will log rejections for easier debugging. To see the
-logs, enable the `tracing` feature for axum (enabled by default) and the
-`axum::rejection=trace` tracing target, for example with
-`RUST_LOG=info,axum::rejection=trace cargo run`.
+所有内置提取器都会记录拒绝，以便更容易调试。要查看日志，为 axum 启用 `tracing` 功能（默认启用）和 `axum::rejection=trace` 追踪目标，例如使用 `RUST_LOG=info,axum::rejection=trace cargo run`。
 
 [axum-extra]: https://docs.rs/axum-extra/latest/axum_extra/extract/index.html
 [`body::Body`]: crate::body::Body
@@ -686,4 +648,6 @@ logs, enable the `tracing` feature for axum (enabled by default) and the
 [customize-extractor-error]: https://github.com/tokio-rs/axum/blob/main/examples/customize-extractor-error/src/main.rs
 [`HeaderMap`]: https://docs.rs/http/latest/http/header/struct.HeaderMap.html
 [`Request`]: https://docs.rs/http/latest/http/struct.Request.html
+[`Json`]: crate::extract::Json
+[`Form`]: crate::extract::Form
 [`JsonRejection::JsonDataError`]: rejection::JsonRejection::JsonDataError

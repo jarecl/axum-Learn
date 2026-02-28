@@ -1,60 +1,51 @@
-Add another route to the router.
+向路由器添加另一个路由。
 
-`path` is a string of path segments separated by `/`. Each segment
-can be either static, a capture, or a wildcard.
+`path` 是一个由 `/` 分隔的路径段字符串。每个段可以是静态的、捕获或通配符。
 
-`method_router` is the [`MethodRouter`] that should receive the request if the
-path matches `path`. Usually, `method_router` will be a handler wrapped in a method
-router like [`get`]. See [`handler`](crate::handler) for more details on handlers.
+`method_router` 是应该在路径匹配 `path` 时接收请求的 [`MethodRouter`]。通常，`method_router` 将是一个包装在方法路由器（如 [`get`]）中的处理器。有关处理器的更多细节，参阅 [`handler`](crate::handler)。
 
-# Static paths
+# 静态路径
 
-Examples:
+示例：
 
 - `/`
 - `/foo`
 - `/users/123`
 
-If the incoming request matches the path exactly the corresponding service will
-be called.
+如果传入请求与路径完全匹配，将调用相应的服务。
 
-# Captures
+# 捕获
 
-Paths can contain segments like `/{key}` which matches any single segment and
-will store the value captured at `key`. The value captured can be zero-length
-except for in the invalid path `//`.
+路径可以包含像 `/{key}` 这样的段，它匹配任何单个段并将捕获的值存储在 `key` 处。捕获的值可以是零长度的，除了在无效路径 `//` 中。
 
-Examples:
+示例：
 
 - `/{key}`
 - `/users/{id}`
 - `/users/{id}/tweets`
 
-Captures can be extracted using [`Path`](crate::extract::Path). See its
-documentation for more details.
+可以使用 [`Path`](crate::extract::Path) 提取捕获。查看其文档了解更多细节。
 
-It is not possible to create segments that only match some types like numbers or
-regular expression. You must handle that manually in your handlers.
+无法创建仅匹配某些类型（如数字）或正则表达式的段。你必须在处理器中手动处理。
 
-[`MatchedPath`] can be used to extract the matched path rather than the actual path.
+[`MatchedPath`] 可用于提取匹配的路径而不是实际路径。
 
-# Wildcards
+# 通配符
 
-Paths can end in `/{*key}` which matches all segments and will store the segments
-captured at `key`.
+路径可以以 `/{*key}` 结尾，它匹配所有段并将捕获的段存储在 `key` 处。
 
-Examples:
+示例：
 
 - `/{*key}`
 - `/assets/{*path}`
 - `/{id}/{repo}/{*tree}`
 
-Note that `/{*key}` doesn't match empty segments. Thus:
+请注意 `/{*key}` 不匹配空段。因此：
 
-- `/{*key}` doesn't match `/` but does match `/a`, `/a/`, etc.
-- `/x/{*key}` doesn't match `/x` or `/x/` but does match `/x/a`, `/x/a/`, etc.
+- `/{*key}` 不匹配 `/` 但匹配 `/a`、`/a/` 等。
+- `/x/{*key}` 不匹配 `/x` 或 `/x/` 但匹配 `/x/a`、`/x/a/` 等。
 
-Wildcard captures can also be extracted using [`Path`](crate::extract::Path):
+也可以使用 [`Path`](crate::extract::Path) 提取通配符捕获：
 
 ```rust
 use axum::{
@@ -70,13 +61,11 @@ async fn handler(Path(path): Path<String>) -> String {
 }
 ```
 
-Note that the leading slash is not included, i.e. for the route `/foo/{*rest}` and
-the path `/foo/bar/baz` the value of `rest` will be `bar/baz`.
+请注意，不包括前导斜杠，即对于路由 `/foo/{*rest}` 和路径 `/foo/bar/baz`，`rest` 的值将是 `bar/baz`。
 
-# Accepting multiple methods
+# 接受多个方法
 
-To accept multiple methods for the same route you can add all handlers at the
-same time:
+要为相同路由接受多个方法，你可以同时添加所有处理器：
 
 ```rust
 use axum::{Router, routing::{get, delete}, extract::Path};
@@ -94,7 +83,7 @@ async fn delete_root() {}
 # let _: Router = app;
 ```
 
-Or you can add them one by one:
+或者你可以一个一个添加：
 
 ```rust
 # use axum::Router;
@@ -111,7 +100,7 @@ let app = Router::new()
 # async fn delete_root() {}
 ```
 
-# More examples
+# 更多示例
 
 ```rust
 use axum::{Router, routing::{get, delete}, extract::Path};
@@ -131,15 +120,15 @@ async fn create_user() {}
 
 async fn show_user(Path(id): Path<u64>) {}
 
-async fn do_users_action(Path((version, id)): Path<(String, u64)>) {}
+async fn do_users_action(Path((version, id)): Path<(String, u64>>) {}
 
 async fn serve_asset(Path(path): Path<String>) {}
 # let _: Router = app;
 ```
 
-# Panics
+# Panic
 
-Panics if the route overlaps with another route:
+如果路由与另一个路由重叠，则会 panic：
 
 ```rust,should_panic
 use axum::{routing::get, Router};
@@ -150,7 +139,6 @@ let app = Router::new()
 # let _: Router = app;
 ```
 
-The static route `/foo` and the dynamic route `/{key}` are not considered to
-overlap and `/foo` will take precedence.
+静态路由 `/foo` 和动态路由 `/{key}` 不被视为重叠，`/foo` 将具有优先权。
 
-Also panics if `path` is empty.
+如果 `path` 为空也会 panic。

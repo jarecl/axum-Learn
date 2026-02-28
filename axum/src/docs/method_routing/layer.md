@@ -1,16 +1,12 @@
-Apply a [`tower::Layer`] to all routes in the router.
+将 [`tower::Layer`] 应用于路由器中的所有路由。
 
-This can be used to add additional processing to a request for a group
-of routes.
+这可以用于为一组路由添加对请求的额外处理。
 
-Note that the middleware is only applied to existing routes. So you have to
-first add your routes (and / or fallback) and then call `layer` afterwards. Additional
-routes added after `layer` is called will not have the middleware added.
+请注意，中间件仅应用于现有的路由。所以你必须先添加路由（和/或 fallback），然后调用 `layer`。在 `layer` 调用后添加的其他路由将不会添加中间件。
 
-Works similarly to [`Router::layer`](super::Router::layer). See that method for
-more details.
+与 [`Router::layer`](super::Router::layer) 类似工作。查看该方法了解更多细节。
 
-# Example
+# 示例
 
 ```rust
 use axum::{routing::get, Router};
@@ -20,7 +16,7 @@ async fn handler() {}
 
 let app = Router::new().route(
     "/",
-    // All requests to `GET /` will be sent through `ConcurrencyLimitLayer`
+    // 对 `GET /` 的所有请求都将通过 `ConcurrencyLimitLayer`
     get(handler).layer(ConcurrencyLimitLayer::new(64)),
 );
 # let _: Router = app;

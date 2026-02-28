@@ -1,9 +1,8 @@
-Nest a [`Router`] at some path.
+将 [`Router`] 嵌套到某个路径。
 
-This allows you to break your application into smaller pieces and compose
-them together.
+这允许你将应用程序分解为更小的部分并将它们组合在一起。
 
-# Example
+# 示例
 
 ```rust
 use axum::{
@@ -21,23 +20,19 @@ let api_routes = Router::new()
 
 let app = Router::new().nest("/api", api_routes);
 
-// Our app now accepts
+// 我们的应用现在接受
 // - GET /api/users/{id}
 // - POST /api/teams
 # let _: Router = app;
 ```
 
-# How the URI changes
+# URI 如何变化
 
-Note that nested routes will not see the original request URI but instead
-have the matched prefix stripped. This is necessary for services like static
-file serving to work. Use [`OriginalUri`] if you need the original request
-URI.
+请注意，嵌套路由将看不到原始请求 URI，而是有匹配的前缀被剥离。这对于像静态文件服务这样的服务工作是必要的。如果你需要原始请求 URI，使用 [`OriginalUri`]。
 
-# Captures from outer routes
+# 来自外部路由的捕获
 
-Take care when using `nest` together with dynamic routes as nesting also
-captures from the outer routes:
+将 `nest` 与动态路由一起使用时要小心，因为嵌套也会从外部路由捕获：
 
 ```rust
 use axum::{
@@ -48,8 +43,8 @@ use axum::{
 use std::collections::HashMap;
 
 async fn users_get(Path(params): Path<HashMap<String, String>>) {
-    // Both `version` and `id` were captured even though `users_api` only
-    // explicitly captures `id`.
+    // `version` 和 `id` 都被捕获了，虽然 `users_api` 只
+    // 显式捕获 `id`。
     let version = params.get("version");
     let id = params.get("id");
 }
@@ -60,37 +55,31 @@ let app = Router::new().nest("/{version}/api", users_api);
 # let _: Router = app;
 ```
 
-# Differences from wildcard routes
+# 与通配符路由的差异
 
-Nested routes are similar to wildcard routes. The difference is that
-wildcard routes still see the whole URI whereas nested routes will have
-the prefix stripped:
+嵌套路由与通配符路由类似。区别在于通配符路由仍然看到整个 URI，而嵌套路由将有前缀被剥离：
 
 ```rust
 use axum::{routing::get, http::Uri, Router};
 
 let nested_router = Router::new()
     .route("/", get(|uri: Uri| async {
-        // `uri` will _not_ contain `/bar`
+        // `uri` 将_不_包含 `/bar`
     }));
 
 let app = Router::new()
     .route("/foo/{*rest}", get(|uri: Uri| async {
-        // `uri` will contain `/foo`
+        // `uri` 将包含 `/foo`
     }))
     .nest("/bar", nested_router);
 # let _: Router = app;
 ```
 
-Additionally, while the wildcard route `/foo/*rest` will not match the
-paths `/foo` or `/foo/`, a nested router at `/foo` will match the path `/foo`
-(but not `/foo/`), and a nested router at `/foo/` will match the path `/foo/`
-(but not `/foo`).
+此外，虽然通配符路由 `/foo/*rest` 不会匹配路径 `/foo` 或 `/foo/`，嵌套在 `/foo` 的路由器将匹配路径 `/foo`（但不匹配 `/foo/`），嵌套在 `/foo/` 的路由器将匹配路径 `/foo/`（但不匹配 `/foo`）。
 
-# Fallbacks
+# Fallback
 
-If a nested router doesn't have its own fallback then it will inherit the
-fallback from the outer router:
+如果嵌套路由没有自己的 fallback，它将从外部路由器继承 fallback：
 
 ```rust
 use axum::{routing::get, http::StatusCode, handler::Handler, Router};
@@ -107,12 +96,9 @@ let app = Router::new()
 # let _: Router = app;
 ```
 
-Here requests like `GET /api/not-found` will go into `api_routes` but because
-it doesn't have a matching route and doesn't have its own fallback it will call
-the fallback from the outer router, i.e. the `fallback` function.
+这里像 `GET /api/not-found` 这样的请求将进入 `api_routes`，但因为它们没有匹配路由且没有自己的 fallback，它将调用外部路由器的 fallback，即 `fallback` 函数。
 
-If the nested router has its own fallback then the outer fallback will not be
-inherited:
+如果嵌套路由有自己的 fallback，则外部 fallback 将不会被继承：
 
 ```rust
 use axum::{
@@ -144,13 +130,11 @@ let app = Router::new()
 # let _: Router = app;
 ```
 
-Here requests like `GET /api/not-found` will go to `api_fallback`.
+这里像 `GET /api/not-found` 这样的请求将转到 `api_fallback`。
 
-# Nesting routers with state
+# 嵌套带有状态的路由器
 
-When combining [`Router`]s with this method, each [`Router`] must have the
-same type of state. If your routers have different types you can use
-[`Router::with_state`] to provide the state and make the types match:
+使用此方法组合 [`Router`] 时，每个 [`Router`] 必须具有相同类型的状体。如果你的路由器具有不同的类型，可以使用 [`Router::with_state`] 提供状态并使类型匹配：
 
 ```rust
 use axum::{
@@ -180,15 +164,13 @@ let app = Router::new()
 # let _: axum::Router = app;
 ```
 
-Note that the inner router will still inherit the fallback from the outer
-router.
+请注意，内部路由器仍将从外部路由器继承 fallback。
 
-# Panics
+# Panic
 
-- If the route overlaps with another route. See [`Router::route`]
-  for more details.
-- If the route contains a wildcard (`*`).
-- If `path` is empty.
+- 如果路由与另一个路由重叠。参阅 [`Router::route`] 了解更多细节。
+- 如果路由包含通配符（`*`）。
+- 如果 `path` 为空。
 
 [`OriginalUri`]: crate::extract::OriginalUri
 [fallbacks]: Router::fallback

@@ -1,4 +1,7 @@
-//! Routing between [`Service`]s and handlers.
+//! 路由模块 - 在 [`Service`] 和处理器之间进行路由
+//!
+//! 在 Spring Boot 中，这相当于 @RequestMapping、@GetMapping、@PostMapping 等注解的功能
+//! 以及 RouterFunction 用于构建路由配置
 
 use self::{future::RouteFuture, not_found::NotFound, path_router::PathRouter};
 #[cfg(feature = "tokio")]
@@ -26,28 +29,43 @@ use tower::service_fn;
 use tower_layer::{layer_fn, Layer};
 use tower_service::Service;
 
-pub mod future;
-pub mod method_routing;
+// 公共模块导出
+pub mod future;      /// 路由处理的 Future 类型
+pub mod method_routing; /// HTTP 方法路由（GET、POST 等）
 
-mod into_make_service;
-mod method_filter;
-mod not_found;
-pub(crate) mod path_router;
-mod route;
-mod strip_prefix;
-pub(crate) mod url_params;
+// 内部模块
+mod into_make_service; /// 将 Router 转换为 MakeService 的工具
+mod method_filter;     /// HTTP 方法过滤器
+mod not_found;         /// 404 Not Found 处理器
+pub(crate) mod path_router; /// 路径路由的核心实现
+mod route;            /// Route 类型
+mod strip_prefix;     /// 去除路径前缀的工具
+pub(crate) mod url_params; /// URL 参数解析
 
 #[cfg(test)]
 mod tests;
 
+// 公共类型导出
 pub use self::{into_make_service::IntoMakeService, method_filter::MethodFilter, route::Route};
 
+// 导出所有 HTTP 方法路由函数
+// 在 Spring Boot 中，这些相当于 @GetMapping、@PostMapping 等注解
 pub use self::method_routing::{
-    any, any_service, connect, connect_service, delete, delete_service, get, get_service, head,
-    head_service, on, on_service, options, options_service, patch, patch_service, post,
-    post_service, put, put_service, trace, trace_service, MethodRouter,
+    any, any_service,      /// 匹配任何 HTTP 方法
+    connect, connect_service, /// CONNECT 方法
+    delete, delete_service,  /// DELETE 方法（@DeleteMapping）
+    get, get_service,        /// GET 方法（@GetMapping）
+    head, head_service,      /// HEAD 方法
+    on, on_service,          /// 自定义 HTTP 方法
+    options, options_service, /// OPTIONS 方法
+    patch, patch_service,    /// PATCH 方法（@PatchMapping）
+    post, post_service,      /// POST 方法（@PostMapping）
+    put, put_service,        /// PUT 方法（@PutMapping）
+    trace, trace_service,    /// TRACE 方法
+    MethodRouter,            /// HTTP 方法路由器类型
 };
 
+// 内部宏：如果表达式返回 Err 则 panic
 macro_rules! panic_on_err {
     ($expr:expr) => {
         match $expr {
@@ -57,9 +75,12 @@ macro_rules! panic_on_err {
     };
 }
 
+// TakeOnceRoute 被多次调用时的错误消息
 const TAKE_ONCE_ROUTE_PANIC_MSG: &str =
     "TakeOnceRoute called more than once; if this was not triggered by an intentional test, this should never happen. Please file an issue.";
 
+// 从 Option<Route> 中取出 Route，如果没有则返回内部错误
+// 这是一个优化：知道服务只会被调用一次，所以使用 Option 来避免克隆
 fn take_route_or_internal_error(service: &mut Option<Route>) -> Route {
     service.take().unwrap_or_else(|| {
         if cfg!(debug_assertions) {
@@ -72,14 +93,22 @@ fn take_route_or_internal_error(service: &mut Option<Route>) -> Route {
     })
 }
 
+// 路由 ID，内部用于标识路由
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct RouteId(usize);
 
-/// The router type for composing handlers and services.
+/// Router - 路由器类型，用于组合处理器和服务
 ///
-/// `Router<S>` means a router that is _missing_ a state of type `S` to be able
-/// to handle requests. Thus, only `Router<()>` (i.e. without missing state) can
-/// be passed to [`serve`]. See [`Router::with_state`] for more details.
+/// 在 Spring Boot 中，这相当于 RouterFunction 或使用 @RequestMapping 配置的 Controller
+///
+/// `Router<S>` 表示一个"缺少"类型 `S` 状态的路由器，需要提供状态才能处理请求。
+/// 因此，只有 `Router<()>`（即没有缺少状态）才能传递给 [`serve`]。
+/// 更多详情请参阅 [`Router::with_state`]。
+///
+/// 在 Java Spring Boot 中对应概念：
+/// - Router 相当于 RouterFunction 或 Controller 类
+/// - S 相当于依赖注入的应用状态
+/// - with_state() 相当于设置应用上下文
 ///
 /// [`serve`]: crate::serve()
 #[must_use]
@@ -87,6 +116,7 @@ pub struct Router<S = ()> {
     inner: Arc<RouterInner<S>>,
 }
 
+// Router 的 Clone 实现（因为内部使用 Arc，克隆很便宜）
 impl<S> Clone for Router<S> {
     fn clone(&self) -> Self {
         Self {
@@ -95,12 +125,14 @@ impl<S> Clone for Router<S> {
     }
 }
 
+// Router 的内部结构（不公开）
 struct RouterInner<S> {
-    path_router: PathRouter<S>,
-    default_fallback: bool,
-    catch_all_fallback: Fallback<S>,
+    path_router: PathRouter<S>,         // 路径路由器
+    default_fallback: bool,              // 是否使用默认的 fallback
+    catch_all_fallback: Fallback<S>,    // 捕获所有请求的 fallback 处理器
 }
 
+// 为 Router 实现 Default（当 S 满足条件时）
 impl<S> Default for Router<S>
 where
     S: Clone + Send + Sync + 'static,
@@ -110,6 +142,7 @@ where
     }
 }
 
+// Router 的 Debug 实现
 impl<S> fmt::Debug for Router<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Router")
@@ -120,12 +153,14 @@ impl<S> fmt::Debug for Router<S> {
     }
 }
 
+// 内部使用的常量，用于嵌套路由和 fallback 的参数名
 pub(crate) const NEST_TAIL_PARAM: &str = "__private__axum_nest_tail_param";
 #[cfg(feature = "matched-path")]
 pub(crate) const NEST_TAIL_PARAM_CAPTURE: &str = "/{*__private__axum_nest_tail_param}";
 pub(crate) const FALLBACK_PARAM: &str = "__private__axum_fallback";
 pub(crate) const FALLBACK_PARAM_PATH: &str = "/{*__private__axum_fallback}";
 
+// 内部宏：映射 inner（创建新的 Router）
 macro_rules! map_inner {
     ( $self_:ident, $inner:pat_param => $expr:expr) => {
         #[allow(redundant_semicolons)]
@@ -138,6 +173,7 @@ macro_rules! map_inner {
     };
 }
 
+// 内部宏：修改 inner（创建新的 Router）
 macro_rules! tap_inner {
     ( $self_:ident, mut $inner:ident => { $($stmt:stmt)* } ) => {
         #[allow(redundant_semicolons)]
@@ -151,14 +187,16 @@ macro_rules! tap_inner {
     };
 }
 
+// Router 的主要方法实现（当 S 满足条件时）
 impl<S> Router<S>
 where
     S: Clone + Send + Sync + 'static,
 {
-    /// Create a new `Router`.
+    /// 创建一个新的 `Router`
     ///
-    /// Unless you add additional routes this will respond with `404 Not Found` to
-    /// all requests.
+    /// 除非你添加其他路由，否则这将对所有请求响应 `404 Not Found`。
+    ///
+    /// 在 Spring Boot 中，这相当于创建一个空的 RouterFunction 或没有路径的 Controller
     pub fn new() -> Self {
         Self {
             inner: Arc::new(RouterInner {
@@ -169,6 +207,8 @@ where
         }
     }
 
+    // 将 Router 消费为内部结构
+    // 如果 Arc 只有一个引用，则直接取出；否则克隆
     fn into_inner(self) -> RouterInner<S> {
         match Arc::try_unwrap(self.inner) {
             Ok(inner) => inner,
@@ -180,6 +220,9 @@ where
         }
     }
 
+    /// 禁用 v0.7 兼容性检查
+    ///
+    /// 这是用于从 axum 0.6 迁移到 0.7 的辅助方法
     #[doc = include_str!("../docs/routing/without_v07_checks.md")]
     pub fn without_v07_checks(self) -> Self {
         tap_inner!(self, mut this => {
@@ -187,6 +230,20 @@ where
         })
     }
 
+    /// 添加路由
+    ///
+    /// 在 Spring Boot 中，这相当于：
+    /// - @GetMapping(path)
+    /// - @PostMapping(path)
+    /// - @RequestMapping(path, method=GET)
+    ///
+    /// 示例：
+    /// ```rust
+    /// use axum::{routing::get, Router};
+    ///
+    /// // 相当于 @GetMapping("/users")
+    /// let app = Router::new().route("/users", get(|| async { "Hello" }));
+    /// ```
     #[doc = include_str!("../docs/routing/route.md")]
     #[track_caller]
     pub fn route(self, path: &str, method_router: MethodRouter<S>) -> Self {
@@ -195,6 +252,11 @@ where
         })
     }
 
+    /// 为服务添加路由
+    ///
+    /// 这类似于 `route`，但接受任意的 `Service` 而不是 `MethodRouter`
+    ///
+    /// 在 Spring Boot 中，这相当于将某个 Filter 或 HandlerFunction 注册到特定路径
     #[doc = include_str!("../docs/routing/route_service.md")]
     pub fn route_service<T>(self, path: &str, service: T) -> Self
     where
@@ -202,6 +264,7 @@ where
         T::Response: IntoResponse,
         T::Future: Send + 'static,
     {
+        // 检查是否错误地传递了 Router，应该使用 nest 而不是 route_service
         let Err(service) = try_downcast::<Self, _>(service) else {
             panic!(
                 "Invalid route: `Router::route_service` cannot be used with `Router`s. \
@@ -214,20 +277,38 @@ where
         })
     }
 
+    /// 嵌套路由器
+    ///
+    /// 在 Spring Boot 中，这相当于：
+    /// - 使用 @RequestMapping() 的 Controller 嵌套
+    /// - RouterFunction 的 nest() 方法
+    ///
+    /// 示例：
+    /// ```rust
+    /// use axum::{routing::get, Router};
+    ///
+    /// let api = Router::new()
+    ///     .route("/users", get(users_handler))
+    ///     .route("/posts", get(posts_handler));
+    ///
+    /// // 相当于 @RequestMapping("/api") 的 Controller
+    /// let app = Router::new().nest("/api", api);
+    /// ```
     #[doc = include_str!("../docs/routing/nest.md")]
-    #[doc(alias = "scope")] // Some other libs like actix-web use this term
+    #[doc(alias = "scope")] // 其他一些库如 actix-web 使用这个术语
     #[track_caller]
     pub fn nest(self, path: &str, router: Self) -> Self {
+        // 不允许在根路径嵌套
         if path.is_empty() || path == "/" {
             panic!("Nesting at the root is no longer supported. Use merge instead.");
         }
 
+        // 取出嵌套路由器的内部结构
         let RouterInner {
             path_router,
             default_fallback: _,
-            // we don't need to inherit the catch-all fallback. It is only used for CONNECT
-            // requests with an empty path. If we were to inherit the catch-all fallback
-            // it would end up matching `/{path}/*` which doesn't match empty paths.
+            // 我们不需要继承 catch-all fallback。它仅用于具有空路径的 CONNECT 请求。
+            // 如果我们要继承 catch-all fallback，它将匹配 `/{path}/*`，这不匹配空路径。
             catch_all_fallback: _,
         } = router.into_inner();
 
@@ -236,7 +317,9 @@ where
         })
     }
 
-    /// Like [`nest`](Self::nest), but accepts an arbitrary `Service`.
+    /// 类似于 [`nest`](Self::nest)，但接受任意的 `Service`
+    ///
+    /// 在 Spring Boot 中，这相当于将整个 Filter 链注册到某个前缀路径
     #[track_caller]
     pub fn nest_service<T>(self, path: &str, service: T) -> Self
     where
@@ -253,6 +336,22 @@ where
         })
     }
 
+    /// 合并两个路由器
+    ///
+    /// 在 Spring Boot 中，这相当于：
+    /// - 将多个 RouterFunction 链接起来
+    /// - 合并多个 Controller 的路由
+    ///
+    /// 示例：
+    /// ```rust
+    /// use axum::{routing::get, Router};
+    ///
+    /// let users_router = Router::new().route("/users", get(users_handler));
+    /// let posts_router = Router::new().route("/posts", get(posts_handler));
+    ///
+    /// // 相当于将两个 RouterFunction 合并
+    /// let app = Router::new().merge(users_router).merge(posts_router);
+    /// ```
     #[doc = include_str!("../docs/routing/merge.md")]
     #[track_caller]
     pub fn merge<R>(self, other: R) -> Self
@@ -267,15 +366,15 @@ where
         } = other.into_inner();
 
         map_inner!(self, mut this => {
+            // 处理 fallback 合并逻辑
             match (this.default_fallback, default_fallback) {
-                // other has a default fallback
-                // use the one from other
+                // other 有默认 fallback，使用 other 的
                 (_, true) => {}
-                // this has default fallback, other has a custom fallback
+                // this 有默认 fallback，other 有自定义 fallback
                 (true, false) => {
                     this.default_fallback = false;
                 }
-                // both have a custom fallback, not allowed
+                // 两者都有自定义 fallback，不允许
                 (false, false) => {
                     panic!("Cannot merge two `Router`s that both have a fallback")
                 }
@@ -292,6 +391,25 @@ where
         })
     }
 
+    /// 添加中间件层
+    ///
+    /// 在 Spring Boot 中，这相当于：
+    /// - Filter
+    /// - Interceptor
+    /// - HandlerFilterFunction
+    ///
+    /// 层应用于所有路由，包括 fallback
+    ///
+    /// 示例：
+    /// ```rust
+    /// use axum::{routing::get, Router};
+    /// use tower::ServiceBuilder;
+    /// use tower_http::trace::TraceLayer;
+    ///
+    /// let app = Router::new()
+    ///     .route("/", get(|| async { "Hello" }))
+    ///     .layer(TraceLayer::new_for_http());
+    /// ```
     #[doc = include_str!("../docs/routing/layer.md")]
     pub fn layer<L>(self, layer: L) -> Self
     where
@@ -308,6 +426,11 @@ where
         })
     }
 
+    /// 添加路由层
+    ///
+    /// 与 `layer` 不同，这仅应用于路由，不应用于 fallback
+    ///
+    /// 在 Spring Boot 中，这相当于只在匹配的路径上应用 Filter
     #[doc = include_str!("../docs/routing/route_layer.md")]
     #[track_caller]
     pub fn route_layer<L>(self, layer: L) -> Self
@@ -325,12 +448,26 @@ where
         })
     }
 
-    /// True if the router currently has at least one route added.
+    /// 如果路由器当前至少添加了一个路由，则返回 true
     #[must_use]
     pub fn has_routes(&self) -> bool {
         self.inner.path_router.has_routes()
     }
 
+    /// 添加 fallback 处理器
+    ///
+    /// 在 Spring Boot 中，这相当于：
+    /// - @ControllerAdvice + @ExceptionHandler 处理所有未匹配的请求
+    /// - 实现 ErrorController
+    ///
+    /// 示例：
+    /// ```rust
+    /// use axum::{routing::get, Router};
+    ///
+    /// let app = Router::new()
+    ///     .route("/", get(|| async { "Hello" }))
+    ///     .fallback(|| async { "404 Not Found" });
+    /// ```
     #[track_caller]
     #[doc = include_str!("../docs/routing/fallback.md")]
     pub fn fallback<H, T>(self, handler: H) -> Self
@@ -345,9 +482,11 @@ where
         .fallback_endpoint(Endpoint::MethodRouter(any(handler)))
     }
 
-    /// Add a fallback [`Service`] to the router.
+    /// 添加 fallback 服务到路由器
     ///
-    /// See [`Router::fallback`] for more details.
+    /// 更多详情请参阅 [`Router::fallback`]。
+    ///
+    /// 在 Spring Boot 中，这相当于自定义 ErrorController
     pub fn fallback_service<T>(self, service: T) -> Self
     where
         T: Service<Request, Error = Infallible> + Clone + Send + Sync + 'static,
@@ -361,6 +500,11 @@ where
         .fallback_endpoint(Endpoint::Route(route))
     }
 
+    /// 添加"方法不允许"的 fallback 处理器
+    ///
+    /// 当路径匹配但 HTTP 方法不匹配时调用
+    ///
+    /// 在 Spring Boot 中，这相当于处理 HttpRequestMethodNotSupportedException
     #[doc = include_str!("../docs/routing/method_not_allowed_fallback.md")]
     #[allow(clippy::needless_pass_by_value)]
     pub fn method_not_allowed_fallback<H, T>(self, handler: H) -> Self
@@ -374,11 +518,11 @@ where
         })
     }
 
-    /// Reset the fallback to its default.
+    /// 将 fallback 重置为默认值
     ///
-    /// Useful to merge two routers with fallbacks, as [`merge`] doesn't allow
-    /// both routers to have an explicit fallback. Use this method to remove the
-    /// one you want to discard before merging.
+    /// 用于合并两个带有 fallback 的路由器，因为 [`merge`] 不允许
+    /// 两个路由器都有显式的 fallback。使用此方法在合并之前删除
+    /// 你想要丢弃的那个。
     ///
     /// [`merge`]: Self::merge
     pub fn reset_fallback(self) -> Self {
@@ -388,13 +532,12 @@ where
         })
     }
 
+    // 内部方法：设置 fallback 端点
     fn fallback_endpoint(self, endpoint: Endpoint<S>) -> Self {
-        // TODO make this better.
-        // We need the returned `Service` to be `Clone` and the function inside `service_fn` to be
-        // `FnMut` so instead of just using the owned service, we do this trick with `Option`. We
-        // know this will be called just once so it's fine. We're doing that so that we avoid one
-        // clone inside `oneshot_inner` so that the `Router` and subsequently the `State` is not
-        // cloned too much.
+        // TODO 改进这个实现。
+        // 我们需要返回的 `Service` 是 `Clone` 的，并且 `service_fn` 中的函数是 `FnMut`，
+        // 所以不仅仅是使用拥有的服务，我们用 `Option` 做这个技巧。我们知道这只会被调用一次，所以没问题。
+        // 我们这样做是为了避免在 `oneshot_inner` 中克隆，这样 `Router` 以及随后的 `State` 不会被过度克隆。
         tap_inner!(self, mut this => {
             _ = this.path_router.route_endpoint(
                 "/",
@@ -440,6 +583,31 @@ where
         })
     }
 
+    /// 提供状态给路由器
+    ///
+    /// 这将 `Router<S>` 转换为 `Router<S2>`，将类型 S 的状态注入到路由器中。
+    ///
+    /// 在 Spring Boot 中，这相当于：
+    /// - 依赖注入：将 Bean 注入到 Controller
+    /// - 设置 ApplicationContext
+    ///
+    /// 示例：
+    /// ```rust
+    /// use axum::{extract::State, routing::get, Router};
+    /// use std::sync::Arc;
+    ///
+    /// struct AppState { /* ... */ }
+    ///
+    /// // 类似 Spring Boot 的 @Component + @Autowired
+    /// let state = Arc::new(AppState { /* ... */ });
+    /// let app = Router::new()
+    ///     .route("/", get(handler))
+    ///     .with_state(state(state));
+    ///
+    /// async fn handler(State(state): State<Arc<AppState>>) {
+    ///     // 使用状态...
+    /// }
+    /// ```
     #[doc = include_str!("../docs/routing/with_state.md")]
     pub fn with_state<S2>(self, state: S) -> Router<S2> {
         map_inner!(self, this => RouterInner {
@@ -449,6 +617,7 @@ where
         })
     }
 
+    // 内部方法：使用状态调用路由器
     pub(crate) fn call_with_state(&self, req: Request, state: S) -> RouteFuture<Infallible> {
         let (req, state) = match self.inner.path_router.call_with_state(req, state) {
             Ok(future) => return future,
@@ -461,59 +630,11 @@ where
             .call_with_state(req, state)
     }
 
-    /// Convert the router into a borrowed [`Service`] with a fixed request body type, to aid type
-    /// inference.
+    /// 将路由器转换为具有固定请求体类型的借用 [`Service`]，以辅助类型推断
     ///
-    /// In some cases when calling methods from [`tower::ServiceExt`] on a [`Router`] you might get
-    /// type inference errors along the lines of
+    /// 在某些情况下，当从 [`tower::ServiceExt`] 调用 [`Router`] 上的方法时，你可能会得到类型推断错误
     ///
-    /// ```not_rust
-    /// let response = router.ready().await?.call(request).await?;
-    ///                       ^^^^^ cannot infer type for type parameter `B`
-    /// ```
-    ///
-    /// This happens because `Router` implements [`Service`] with `impl<B> Service<Request<B>> for Router<()>`.
-    ///
-    /// For example:
-    ///
-    /// ```compile_fail
-    /// use axum::{
-    ///     Router,
-    ///     routing::get,
-    ///     http::Request,
-    ///     body::Body,
-    /// };
-    /// use tower::{Service, ServiceExt};
-    ///
-    /// # async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let mut router = Router::new().route("/", get(|| async {}));
-    /// let request = Request::new(Body::empty());
-    /// let response = router.ready().await?.call(request).await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    ///
-    /// Calling `Router::as_service` fixes that:
-    ///
-    /// ```
-    /// use axum::{
-    ///     Router,
-    ///     routing::get,
-    ///     http::Request,
-    ///     body::Body,
-    /// };
-    /// use tower::{Service, ServiceExt};
-    ///
-    /// # async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let mut router = Router::new().route("/", get(|| async {}));
-    /// let request = Request::new(Body::empty());
-    /// let response = router.as_service().ready().await?.call(request).await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    ///
-    /// This is mainly used when calling `Router` in tests. It shouldn't be necessary when running
-    /// the `Router` normally via [`Router::into_make_service`].
+    /// 这主要在测试中使用 `Router` 时使用。通过 [`Router::into_make_service`] 正常运行 `Router` 时不应该需要它。
     pub fn as_service<B>(&mut self) -> RouterAsService<'_, B, S> {
         RouterAsService {
             router: self,
@@ -521,11 +642,10 @@ where
         }
     }
 
-    /// Convert the router into an owned [`Service`] with a fixed request body type, to aid type
-    /// inference.
+    /// 将路由器转换为具有固定请求体类型的拥有 [`Service`]，以辅助类型推断
     ///
-    /// This is the same as [`Router::as_service`] instead it returns an owned [`Service`]. See
-    /// that method for more details.
+    /// 这与 [`Router::as_service`] 相同，但它返回一个拥有所有权的 [`Service`]。
+    /// 更多详情请参阅该方法。
     #[must_use]
     pub fn into_service<B>(self) -> RouterIntoService<B, S> {
         RouterIntoService {
@@ -535,13 +655,16 @@ where
     }
 }
 
+// Router<()> 的额外方法实现（当没有状态时）
 impl Router {
-    /// Convert this router into a [`MakeService`], that is a [`Service`] whose
-    /// response is another service.
+    /// 将此路由器转换为 [`MakeService`]，即一个 [`Service`]，其响应是另一个服务
     ///
+    /// 在 Spring Boot 中，这相当于创建一个 Tomcat/Jetty 服务器实例并传入 DispatcherServlet
+    ///
+    /// 示例：
     /// ```
     /// use axum::{
-    ///     routing::get,
+ra///     routing::get,
     ///     Router,
     /// };
     ///
@@ -549,6 +672,7 @@ impl Router {
     ///
     /// # async {
     /// let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    /// // 类似于 SpringApplication.run()
     /// axum::serve(listener, app).await;
     /// # };
     /// ```
@@ -556,22 +680,24 @@ impl Router {
     /// [`MakeService`]: tower::make::MakeService
     #[must_use]
     pub fn into_make_service(self) -> IntoMakeService<Self> {
-        // call `Router::with_state` such that everything is turned into `Route` eagerly
-        // rather than doing that per request
+        // 调用 `Router::with_state` 以便所有内容都被急切地转换为 `Route`
+        // 而不是每个请求都这样做
         IntoMakeService::new(self.with_state(()))
     }
 
+    /// 将路由器转换为能够访问连接信息的 MakeService
     #[doc = include_str!("../docs/routing/into_make_service_with_connect_info.md")]
     #[cfg(feature = "tokio")]
     #[must_use]
     pub fn into_make_service_with_connect_info<C>(self) -> IntoMakeServiceWithConnectInfo<Self, C> {
-        // call `Router::with_state` such that everything is turned into `Route` eagerly
-        // rather than doing that per request
+        // 调用 `Router::with_state` 以便所有内容都被急切地转换为 `Route`
+        // 而不是每个请求都这样做
         IntoMakeServiceWithConnectInfo::new(self.with_state(()))
     }
 }
 
-// for `axum::serve(listener, router)`
+// 为 Router<()> 实现 Service<IncomingStream>
+// 这使得 axum::serve(listener, router) 可以工作
 #[cfg(all(feature = "tokio", any(feature = "http1", feature = "http2")))]
 const _: () = {
     use crate::serve;
@@ -589,13 +715,14 @@ const _: () = {
         }
 
         fn call(&mut self, _req: serve::IncomingStream<'_, L>) -> Self::Future {
-            // call `Router::with_state` such that everything is turned into `Route` eagerly
-            // rather than doing that per request
+            // 调用 `Router::with_state` 以便所有内容都被急切地转换为 `Route`
+            // 而不是每个请求都这样做
             std::future::ready(Ok(self.clone().with_state(())))
         }
     }
 };
 
+// 为 Router<()> 实现 Service<Request<B>>
 impl<B> Service<Request<B>> for Router<()>
 where
     B: HttpBody<Data = bytes::Bytes> + Send + 'static,
@@ -617,14 +744,15 @@ where
     }
 }
 
-/// A [`Router`] converted into a borrowed [`Service`] with a fixed body type.
+/// 转换为具有固定体类型的借用 [`Service`] 的 [`Router`]
 ///
-/// See [`Router::as_service`] for more details.
+/// 更多详情请参阅 [`Router::as_service`]。
 pub struct RouterAsService<'a, B, S = ()> {
     router: &'a mut Router<S>,
     _marker: PhantomData<fn(B)>,
 }
 
+// 为 RouterAsService 实现 Service
 impl<B> Service<Request<B>> for RouterAsService<'_, B, ()>
 where
     B: HttpBody<Data = bytes::Bytes> + Send + 'static,
@@ -645,6 +773,7 @@ where
     }
 }
 
+// RouterAsService 的 Debug 实现
 impl<B, S> fmt::Debug for RouterAsService<'_, B, S>
 where
     S: fmt::Debug,
@@ -656,14 +785,15 @@ where
     }
 }
 
-/// A [`Router`] converted into an owned [`Service`] with a fixed body type.
+/// 转换为具有固定体类型的拥有 [`Service`] 的 [`Router`]
 ///
-/// See [`Router::into_service`] for more details.
+/// 更多详情请参阅 [`Router::into_service`]。
 pub struct RouterIntoService<B, S = ()> {
     router: Router<S>,
     _marker: PhantomData<fn(B)>,
 }
 
+// RouterIntoService 的 Clone 实现
 impl<B, S> Clone for RouterIntoService<B, S>
 where
     Router<S>: Clone,
@@ -676,6 +806,7 @@ where
     }
 }
 
+// 为 RouterIntoService 实现 Service
 impl<B> Service<Request<B>> for RouterIntoService<B, ()>
 where
     B: HttpBody<Data = bytes::Bytes> + Send + 'static,
@@ -696,6 +827,7 @@ where
     }
 }
 
+// RouterIntoService 的 Debug 实现
 impl<B, S> fmt::Debug for RouterIntoService<B, S>
 where
     S: fmt::Debug,
@@ -707,25 +839,29 @@ where
     }
 }
 
+// Fallback 枚举：表示不同类型的 fallback 处理器
 enum Fallback<S, E = Infallible> {
-    Default(Route<E>),
-    Service(Route<E>),
-    BoxedHandler(BoxedIntoRoute<S, E>),
+    Default(Route<E>),              // 默认的 404 fallback
+    Service(Route<E>),             // 自定义 Service fallback
+    BoxedHandler(BoxedIntoRoute<S, E>), // 盒装的处理器 fallback
 }
 
+// Fallback 的方法实现
 impl<S, E> Fallback<S, E>
 where
     S: Clone,
 {
+    // 合并两个 fallback
     fn merge(self, other: Self) -> Option<Self> {
         match (self, other) {
-            // If either are `Default`, return the opposite one.
+            // 如果任一个是 `Default`，返回另一个
             (Self::Default(_), pick) | (pick, Self::Default(_)) => Some(pick),
-            // Otherwise, return None
+            // 否则，返回 None（两个自定义 fallback 不能合并）
             _ => None,
         }
     }
 
+    // 对 fallback 应用映射函数
     fn map<F, E2>(self, f: F) -> Fallback<S, E2>
     where
         S: 'static,
@@ -740,6 +876,7 @@ where
         }
     }
 
+    // 使用状态调用 fallback
     fn with_state<S2>(self, state: S) -> Fallback<S2, E> {
         match self {
             Self::Default(route) => Fallback::Default(route),
@@ -748,6 +885,7 @@ where
         }
     }
 
+    // 使用状态调用 fallback 处理请求
     fn call_with_state(self, req: Request, state: S) -> RouteFuture<E> {
         match self {
             Self::Default(route) | Self::Service(route) => route.oneshot_inner_owned(req),
@@ -758,11 +896,13 @@ where
         }
     }
 
+    // 检查是否是默认 fallback
     fn is_default(&self) -> bool {
         matches!(self, Self::Default(..))
     }
 }
 
+// Fallback 的 Clone 实现
 impl<S, E> Clone for Fallback<S, E> {
     fn clone(&self) -> Self {
         match self {
@@ -773,6 +913,7 @@ impl<S, E> Clone for Fallback<S, E> {
     }
 }
 
+// Fallback 的 Debug 实现
 impl<S, E> fmt::Debug for Fallback<S, E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -783,16 +924,19 @@ impl<S, E> fmt::Debug for Fallback<S, E> {
     }
 }
 
+// Endpoint 枚举：表示路由端点的类型
 #[allow(clippy::large_enum_variant)]
 enum Endpoint<S> {
-    MethodRouter(MethodRouter<S>),
-    Route(Route),
+    MethodRouter(MethodRouter<S>),  // HTTP 方法路由器
+    Route(Route),                  // 路由服务
 }
 
+// Endpoint 的方法实现
 impl<S> Endpoint<S>
 where
     S: Clone + Send + Sync + 'static,
 {
+    // 对 endpoint 应用层
     fn layer<L>(self, layer: L) -> Self
     where
         L: Layer<Route> + Clone + Send + Sync + 'static,
@@ -808,6 +952,7 @@ where
     }
 }
 
+// Endpoint 的 Clone 实现
 impl<S> Clone for Endpoint<S> {
     fn clone(&self) -> Self {
         match self {
@@ -817,6 +962,7 @@ impl<S> Clone for Endpoint<S> {
     }
 }
 
+// Endpoint 的 Debug 实现
 impl<S> fmt::Debug for Endpoint<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

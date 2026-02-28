@@ -1,29 +1,25 @@
-## Debugging handler type errors
+## 调试处理器类型错误
 
-For a function to be used as a handler it must implement the [`Handler`] trait.
-axum provides blanket implementations for functions that:
+要使函数作为处理器使用，它必须实现 [`Handler`] trait。axum 为以下类型的函数提供了 blanket 实现：
 
-- Are `async fn`s.
-- Take no more than 16 arguments that all implement `Send`.
-  - All except the last argument implement [`FromRequestParts`].
-  - The last argument implements [`FromRequest`].
-- Returns something that implements [`IntoResponse`].
-- If a closure is used it must implement `Clone + Send` and be
-`'static`.
-- Returns a future that is `Send`. The most common way to accidentally make a
-future `!Send` is to hold a `!Send` type across an await.
+- 是 `async fn` 的函数
+- 接受不超过 16 个参数，且所有参数都实现 `Send`
+  - 除最后一个参数外的所有参数都实现 [`FromRequestParts`]
+  - 最后一个参数实现 [`FromRequest`]
+- 返回一个实现 [`IntoResponse`] 的类型
+- 如果使用闭包，它必须实现 `Clone + Send` 并且是 `'static` 的
+- 返回一个 `Send` 的 future。最常见的不小心让 future 变成 `!Send` 的方式是在 await 跨越持有一个 `!Send` 类型
 
-Unfortunately Rust gives poor error messages if you try to use a function
-that doesn't quite match what's required by [`Handler`].
+不幸的是，如果你尝试使用一个不完全符合 [`Handler`] 要求的函数，Rust 会给出糟糕的错误消息。
 
-You might get an error like this:
+你可能会遇到这样的错误：
 
 ```not_rust
 error[E0277]: the trait bound `fn(bool) -> impl Future {handler}: Handler<_, _>` is not satisfied
    --> src/main.rs:13:44
     |
 13  |     let app = Router::new().route("/", get(handler));
-    |                                            ^^^^^^^ the trait `Handler<_, _>` is not implemented for `fn(bool) -> impl Future {handler}`
+    |                                            ^^^^^^^        trait `Handler<_, _>` is not implemented for `fn(bool) -> impl Future {handler}`
     |
    ::: axum/src/handler/mod.rs:116:8
     |
@@ -31,9 +27,7 @@ error[E0277]: the trait bound `fn(bool) -> impl Future {handler}: Handler<_, _>`
     |        ------------- required by this bound in `axum::routing::get`
 ```
 
-This error doesn't tell you _why_ your function doesn't implement
-[`Handler`]. It's possible to improve the error with the [`debug_handler`]
-proc-macro from the [axum-macros] crate.
+这个错误没有告诉你 _为什么_ 你的函数没有实现 [`Handler`]。可以使用 [axum-macros] crate 中的 [`debug_handler`] 过程宏来改进错误。
 
 [axum-macros]: https://docs.rs/axum-macros
 [`debug_handler`]: https://docs.rs/axum-macros/latest/axum_macros/attr.debug_handler.html

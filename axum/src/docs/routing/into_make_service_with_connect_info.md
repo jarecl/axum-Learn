@@ -1,10 +1,8 @@
-Convert this router into a [`MakeService`], that will store `C`'s
-associated `ConnectInfo` in a request extension such that [`ConnectInfo`]
-can extract it.
+将此路由器转换为 [`MakeService`]，它将 `C` 的关联 `ConnectInfo` 存储在请求扩展中，以便 [`ConnectInfo`] 可以提取它。
 
-This enables extracting things like the client's remote address.
+这使提取客户端远程地址等内容成为可能。
 
-Extracting [`std::net::SocketAddr`] is supported out of the box:
+开箱即支持提取 [`std::net::SocketAddr`]：
 
 ```rust
 use axum::{
@@ -26,14 +24,14 @@ axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).a
 # };
 ```
 
-You can implement custom a [`Connected`] like so:
+你可以像这样实现自定义 [`Connected`]：
 
 ```rust
 use axum::{
     extract::connect_info::{ConnectInfo, Connected},
     routing::get,
     serve::IncomingStream,
-    Router,
+    Router
 };
 use tokio::net::TcpListener;
 
@@ -64,8 +62,7 @@ axum::serve(listener, app.into_make_service_with_connect_info::<MyConnectInfo>()
 # };
 ```
 
-See the [unix domain socket example][uds] for an example of how to use
-this to collect UDS connection info.
+参阅 [unix domain socket 示例][uds] 了解如何使用它收集 UDS 连接信息的示例。
 
 [`MakeService`]: tower::make::MakeService
 [`Connected`]: crate::extract::connect_info::Connected

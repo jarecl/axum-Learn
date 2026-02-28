@@ -1,11 +1,11 @@
-Add a fallback [`Handler`] to the router.
+向路由器添加一个 fallback [`Handler`]。
 
-This service will be called if no routes matches the incoming request.
+如果没有路由匹配传入的请求，将调用此服务。
 
 ```rust
 use axum::{
     Router,
-    routing::get,
+    routing::ver,
     handler::Handler,
     response::IntoResponse,
     http::{StatusCode, Uri},
@@ -21,18 +21,11 @@ async fn fallback(uri: Uri) -> (StatusCode, String) {
 # let _: Router = app;
 ```
 
-Fallbacks only apply to routes that aren't matched by anything in the
-router. If a handler is matched by a request but returns 404 the
-fallback is not called. Note that this applies to [`MethodRouter`]s too: if the
-request hits a valid path but the [`MethodRouter`] does not have an appropriate
-method handler installed, the fallback is not called (use
-[`MethodRouter::fallback`] for this purpose instead).
+Fallbacks 仅仅应用于路由器中没有任何东西匹配的路由。如果处理器被请求匹配但返回 404，则不会调用 fallback。请注意这也适用于 [`MethodRouter`]：如果请求命中有效路径但 [`MethodRouter`] 没有安装适当的方法处理器，则不会调用 fallback（为此目的使用 [`MethodRouter::fallback`]）。
 
+# 处理没有其他路由的所有请求
 
-# Handling all requests without other routes
-
-Using `Router::new().fallback(...)` to accept all request regardless of path or
-method, if you don't have other routes, isn't optimal:
+使用 `Router::new().fallback(...)` 来接受所有请求而不管路径或方法，如果你没有其他路由，不是最优的：
 
 ```rust
 use axum::Router;
@@ -47,7 +40,7 @@ axum::serve(listener, app).await;
 # };
 ```
 
-Running the handler directly is faster since it avoids the overhead of routing:
+直接运行处理器更快，因为它避免了路由的开销：
 
 ```rust
 use axum::handler::HandlerWithoutStateExt;

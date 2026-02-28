@@ -1,17 +1,12 @@
-Error handling model and utilities
+错误处理模型和工具
 
-# axum's error handling model
+# axum 的错误处理模型
 
-axum is based on [`tower::Service`] which bundles errors through its associated
-`Error` type. If you have a [`Service`] that produces an error and that error
-makes it all the way up to hyper, the connection will be terminated _without_
-sending a response. This is generally not desirable so axum makes sure you
-always produce a response by relying on the type system.
+axum 基于 [`tower::Service`]，它通过其关联的 `Error` 类型来打包错误。如果你有一个产生错误的 [`Service`]，并且该错误一路传达到 hyper，连接将在不发送响应的情况下终止。这通常是不希望的，因此 axum 通过依赖类型系统确保你始终产生响应。
 
-axum does this by requiring all services have [`Infallible`] as their error
-type. `Infallible` is the error type for errors that can never happen.
+axum 通过要求所有服务将 [`Infallible`] 作为其错误类型来实现这一点。`Infallible` 是永远不会发生的错误的错误类型。
 
-This means if you define a handler like:
+这意味着如果你定义一个像这样的处理器：
 
 ```rust
 use axum::http::StatusCode;
@@ -22,36 +17,23 @@ async fn handler() -> Result<String, StatusCode> {
 }
 ```
 
-While it looks like it might fail with a `StatusCode` this actually isn't an
-"error". If this handler returns `Err(some_status_code)` that will still be
-converted into a [`Response`] and sent back to the client. This is done
-through `StatusCode`'s [`IntoResponse`] implementation.
+虽然它看起来可能会因为 `StatusCode` 而失败，但实际上这并不是"错误"。如果这个处理器返回 `Err(some_status_code)`，它仍然会被转换成 [`Response`] 并发送回客户端。这是通过 `StatusCode` 的 [`IntoResponse`] 实现完成的。
 
-It doesn't matter whether you return `Err(StatusCode::NOT_FOUND)` or
-`Err(StatusCode::INTERNAL_SERVER_ERROR)`. These are not considered errors in
-axum.
+返回 `Err(StatusCode::NOT_FOUND)` 还是 `Err(StatusCode::INTERNAL_SERVER_ERROR)` 并不重要。在 axum 中这些都不被视为错误。
 
-Instead of a direct `StatusCode`, it makes sense to use intermediate error type
-that can ultimately be converted to `Response`. This allows using `?` operator
-in handlers. See those examples:
+与其直接使用 `StatusCode`，使用一个最终可以转换为 `Response` 的中间错误类型更有意义。这允许在处理器中使用 `?` 运算符。查看这些示例：
 
-* [`anyhow-error-response`][anyhow] for generic boxed errors
-* [`error-handling`][error-handling] for application-specific detailed errors
+* [`anyhow-error-response`][anyhow] 用于通用 boxed 错误
+* [`error-handling`][error-handling] 用于应用特定的详细错误
 
 [anyhow]: https://github.com/tokio-rs/axum/blob/main/examples/anyhow-error-response/src/main.rs
 [error-handling]: https://github.com/tokio-rs/axum/blob/main/examples/error-handling/src/main.rs
 
-This also applies to extractors. If an extractor doesn't match the request the
-request will be rejected and a response will be returned without calling your
-handler. See [`extract`](crate::extract) to learn more about handling extractor
-failures.
+这也适用于提取器。如果提取器与请求不匹配，请求将被拒绝并返回响应，而不会调用你的处理器。参见 [`extract`](crate::extract) 了解更多关于处理提取器失败的信息。
 
-# Routing to fallible services
+# 路由到可能失败的服务
 
-You generally don't have to think about errors if you're only using async
-functions as handlers. However if you're embedding general `Service`s or
-applying middleware, which might produce errors you have to tell axum how to
-convert those errors into responses.
+如果你只使用 async 函数作为处理器，通常不需要考虑错误。但是，如果你正在嵌入通用的 `Service` 或应用可能产生错误的中间件，你必须告诉 axum 如何将这些错误转换为响应。
 
 ```rust
 use axum::{
@@ -66,7 +48,7 @@ async fn thing_that_might_fail() -> Result<(), anyhow::Error> {
     // ...
 }
 
-// this service might fail with `anyhow::Error`
+// 这个服务可能会失败并返回 `anyhow::Error`
 let some_fallible_service = tower::service_fn(|_req| async {
     thing_that_might_fail().await?;
     Ok::<_, anyhow::Error>(Response::new(Body::empty()))
@@ -74,14 +56,13 @@ let some_fallible_service = tower::service_fn(|_req| async {
 
 let app = Router::new().route_service(
     "/",
-    // we cannot route to `some_fallible_service` directly since it might fail.
-    // we have to use `handle_error` which converts its errors into responses
-    // and changes its error type from `anyhow::Error` to `Infallible`.
+    // 我们不能直接路由到 `some_fallible_service`，因为它可能会失败。
+    // 我们必须使用 `handle_error`，它将错误转换为响应
+    // 并将其错误类型从 `anyhow::Error` 更改为 `Infallible`。
     HandleError::new(some_fallible_service, handle_anyhow_error),
 );
 
-// handle errors by converting them into something that implements
-// `IntoResponse`
+// 通过将错误转换为实现 `IntoResponse` 的东西来处理错误
 async fn handle_anyhow_error(err: anyhow::Error) -> (StatusCode, String) {
     (
         StatusCode::INTERNAL_SERVER_ERROR,
@@ -91,10 +72,9 @@ async fn handle_anyhow_error(err: anyhow::Error) -> (StatusCode, String) {
 # let _: Router = app;
 ```
 
-# Applying fallible middleware
+# 应用可能失败的中间件
 
-Similarly axum requires you to handle errors from middleware. That is done with
-[`HandleErrorLayer`]:
+类似地，axum 要求你处理来自中间件的错误。这是通过 [`HandleErrorLayer`] 完成的：
 
 ```rust
 use axum::{
@@ -111,8 +91,7 @@ let app = Router::new()
     .route("/", get(|| async {}))
     .layer(
         ServiceBuilder::new()
-            // `timeout` will produce an error if the handler takes
-            // too long so we must handle those
+            // 如果处理器耗时太长，`timeout` 会产生错误，所以我们必须处理这些错误
             .layer(HandleErrorLayer::new(handle_timeout_error))
             .timeout(Duration::from_secs(30))
     );
@@ -133,9 +112,9 @@ async fn handle_timeout_error(err: BoxError) -> (StatusCode, String) {
 # let _: Router = app;
 ```
 
-# Running extractors for error handling
+# 运行提取器进行错误处理
 
-`HandleErrorLayer` also supports running extractors:
+`HandleErrorLayer` 还支持运行提取器：
 
 ```rust
 use axum::{
@@ -152,17 +131,16 @@ let app = Router::new()
     .route("/", get(|| async {}))
     .layer(
         ServiceBuilder::new()
-            // `timeout` will produce an error if the handler takes
-            // too long so we must handle those
+            // 如果处理器耗时太长，`timeout` 会产生错误，所以我们必须处理这些错误
             .layer(HandleErrorLayer::new(handle_timeout_error))
             .timeout(Duration::from_secs(30))
     );
 
 async fn handle_timeout_error(
-    // `Method` and `Uri` are extractors so they can be used here
+    // `Method` 和 `Uri` 是提取器，所以可以在这里使用
     method: Method,
     uri: Uri,
-    // the last argument must be the error itself
+    // 最后一个参数必须是错误本身
     err: BoxError,
 ) -> (StatusCode, String) {
     (

@@ -1,5 +1,4 @@
-Provide the state for the router. State passed to this method is global and will be used
-for all requests this router receives. That means it is not suitable for holding state derived from a request, such as authorization data extracted in a middleware. Use [`Extension`] instead for such data.
+为路由器提供状态。传递给此方法的状态是全局的，将用于此路由器接收的所有请求。这意味着它不适合持有从请求派生的状态，例如在中间件中提取的授权数据。对于此类数据，使用 [`Extension`] 代替。
 
 ```rust
 use axum::{Router, routing::get, extract::State};
@@ -9,7 +8,7 @@ struct AppState {}
 
 let routes = Router::new()
     .route("/", get(|State(state): State<AppState>| async {
-        // use state
+        // 使用状态
     }))
     .with_state(AppState {});
 
@@ -19,10 +18,9 @@ axum::serve(listener, routes).await;
 # };
 ```
 
-# Returning routers with states from functions
+# 从函数返回带有状态的路由器
 
-When returning `Router`s from functions, it is generally recommended not to set the
-state directly:
+从函数返回 `Router` 时，通常不建议直接设置状态：
 
 ```rust
 use axum::{Router, routing::get, extract::State};
@@ -30,13 +28,13 @@ use axum::{Router, routing::get, extract::State};
 #[derive(Clone)]
 struct AppState {}
 
-// Don't call `Router::with_state` here
+// 不要在这里调用 `Router::with_state`
 fn routes() -> Router<AppState> {
     Router::new()
         .route("/", get(|_: State<AppState>| async {}))
 }
 
-// Instead do it before you run the server
+// 而是在运行服务器之前进行
 let routes = routes().with_state(AppState {});
 
 # async {
@@ -45,15 +43,14 @@ axum::serve(listener, routes).await;
 # };
 ```
 
-If you do need to provide the state, and you're _not_ nesting/merging the router
-into another router, then return `Router` without any type parameters:
+如果你确实需要提供状态，并且你_没有_将路由器嵌套/合并到另一个路由器中，那么返回不带任何类型参数的 `Router`：
 
 ```rust
 # use axum::{Router, routing::get, extract::State};
 # #[derive(Clone)]
 # struct AppState {}
 #
-// Don't return `Router<AppState>`
+// 不要返回 `Router<AppState>`
 fn routes(state: AppState) -> Router {
     Router::new()
         .route("/", get(|_: State<AppState>| async {}))
@@ -68,13 +65,11 @@ axum::serve(listener, routes).await;
 # };
 ```
 
-This is because we can only call `Router::into_make_service` on `Router<()>`,
-not `Router<AppState>`. See below for more details about why that is.
+这是因为我们只能在 `Router<()>` 上调用 `Router::into_make_service`，而不能在 `Router<AppState>` 上调用。参阅下面了解更多关于为什么会这样的细节。
 
-Note that the state defaults to `()` so `Router` and `Router<()>` is the same.
+请注意，状态默认为 `()`，所以 `Router` 和 `Router<()>` 是相同的。
 
-If you are nesting/merging the router it is recommended to use a generic state
-type on the resulting router:
+如果你正在嵌套/合并路由器，建议在结果路由器上使用通用状态类型：
 
 ```rust
 # use axum::{Router, routing::get, extract::State};
@@ -87,7 +82,7 @@ fn routes<S>(state: AppState) -> Router<S> {
         .with_state(state)
 }
 
-let routes = Router::new().nest("/api", routes(AppState {}));
+let routes = Router::new().nest("/api", routes(AppState {});
 
 # async {
 let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -95,78 +90,76 @@ axum::serve(listener, routes).await;
 # };
 ```
 
-# What `S` in `Router<S>` means
+# `Router<S>` 中的 `S` 意味着什么
 
-`Router<S>` means a router that is _missing_ a state of type `S` to be able to
-handle requests. It does _not_ mean a `Router` that _has_ a state of type `S`.
+`Router<S>` 意味着一个路由器需要类型为 `S` 的状态才能处理请求。它_不_意昧着一个_有_类型为 `S` 的状态的 `Router`。
 
-For example:
+例如：
 
 ```rust
 # use axum::{Router, routing::get, extract::State};
 # #[derive(Clone)]
 # struct AppState {}
-# 
-// A router that _needs_ an `AppState` to handle requests
+#
+// 一个_需要_ `AppState` 来处理请求的路由器
 let router: Router<AppState> = Router::new()
     .route("/", get(|_: State<AppState>| async {}));
 
-// Once we call `Router::with_state` the router isn't missing
-// the state anymore, because we just provided it
+// 一旦我们调用 `Router::with_state` 路由器就不再需要
+// 状态了，因为我们刚刚提供了它
 //
-// Therefore the router type becomes `Router<()>`, i.e a router
-// that is not missing any state
+// 因此，路由器类型变成 `Router<()>`，即一个
+// 不缺少任何状态的路由器
 let router: Router<()> = router.with_state(AppState {});
 
-// Only `Router<()>` has the `into_make_service` method.
+// 只有 `Router<()>` 有 `into_make_service` 方法。
 //
-// You cannot call `into_make_service` on a `Router<AppState>`
-// because it is still missing an `AppState`.
+// 你不能在 `Router<AppState>` 上调用 `into_make_service`
+// 因为它仍然缺少一个 `AppState`。
 # async {
 let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
 axum::serve(listener, router).await;
 # };
 ```
 
-Perhaps a little counter intuitively, `Router::with_state` doesn't always return a
-`Router<()>`. Instead you get to pick what the new missing state type is:
+可能有点反直觉，`Router::with_state` 并不总是返回 `Router<()>`。相反，你可以选择新的缺失状态类型是什么：
 
 ```rust
 # use axum::{Router, routing::get, extract::State};
 # #[derive(Clone)]
 # struct AppState {}
-# 
+#
 let router: Router<AppState> = Router::new()
     .route("/", get(|_: State<AppState>| async {}));
 
-// When we call `with_state` we're able to pick what the next missing state type is.
-// Here we pick `String`.
+// 当我们调用 `with_state` 时，我们能够选择下一个缺失状态类型是什么。
+// 这里我们选择 `String`。
 let string_router: Router<String> = router.with_state(AppState {});
 
-// That allows us to add new routes that uses `String` as the state type
+// 这允许我们添加使用 `String` 作为状态类型的新路由
 let string_router = string_router
     .route("/needs-string", get(|_: State<String>| async {}));
 
-// Provide the `String` and choose `()` as the new missing state.
+// 提供 `String` 并选择 `()` 作为新的缺失状态。
 let final_router: Router<()> = string_router.with_state("foo".to_owned());
 
-// Since we have a `Router<()>` we can run it.
+// 由于我们有一个 `Router<()>`，我们可以运行它。
 # async {
 let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-axum::serve(listener, final_router).await;
+axum::serve
+(listener, final_router).await;
 # };
 ```
 
-This is why returning `Router<AppState>` after calling `with_state` doesn't
-work:
+这就是为什么在调用 `with_state` 后返回 `Router<AppState>` 不起作用：
 
 ```rust,compile_fail
 # use axum::{Router, routing::get, extract::State};
 # #[derive(Clone)]
 # struct AppState {}
-# 
-// This won't work because we're returning a `Router<AppState>`
-// i.e. we're saying we're still missing an `AppState`
+#
+// 这不起作用，因为我们返回一个 `Router<AppState>`
+// 即我们说我们仍然缺少一个 `AppState`
 fn routes(state: AppState) -> Router<AppState> {
     Router::new()
         .route("/", get(|_: State<AppState>| async {}))
@@ -175,22 +168,22 @@ fn routes(state: AppState) -> Router<AppState> {
 
 let app = routes(AppState {});
 
-// We can only call `Router::into_make_service` on a `Router<()>`
-// but `app` is a `Router<AppState>`
+// 我们只能在 `Router<()>` 上调用 `Router::into_make_service`
+// 但 `app` 是一个 `Router<AppState>`
 # async {
 let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
 axum::serve(listener, app).await;
 # };
 ```
 
-Instead return `Router<()>` since we have provided all the state needed:
+而是返回 `Router<()>`，因为我们提供了所有必需的状态：
 
 ```rust
 # use axum::{Router, routing::get, extract::State};
 # #[derive(Clone)]
 # struct AppState {}
-# 
-// We've provided all the state necessary so return `Router<()>`
+#
+// 我们已经提供了所有必需的状态，所以返回 `Router<()>`
 fn routes(state: AppState) -> Router<()> {
     Router::new()
         .route("/", get(|_: State<AppState>| async {}))
@@ -199,33 +192,29 @@ fn routes(state: AppState) -> Router<()> {
 
 let app = routes(AppState {});
 
-// We can now call `Router::into_make_service`
+// 我们现在可以调用 `Router::into_make_service`
 # async {
 let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
 axum::serve(listener, app).await;
 # };
 ```
 
-# A note about performance
+# 关于性能的说明
 
-If you need a `Router` that implements `Service` but you don't need any state (perhaps
-you're making a library that uses axum internally) then it is recommended to call this
-method before you start serving requests:
+如果你需要一个实现 `Service` 的 `Router` 但不需要任何状态（也许你正在创建内部使用 axum 的库），那么建议在开始服务请求之前调用此方法：
 
 ```rust
 use axum::{Router, routing::get};
 
 let app = Router::new()
     .route("/", get(|| async { /* ... */ }))
-    // even though we don't need any state, call `with_state(())` anyway
+    // 即使我们不需要任何状态，无论如何都调用 `with_state(())`
     .with_state(());
 # let _: Router = app;
 ```
 
-This is not required but it gives axum a chance to update some internals in the router
-which may impact performance and reduce allocations.
+这不是必需的，但它给 axum 了一个机会来更新路由器中的一些内部内容，这可能会影响性能并减少分配。
 
-Note that [`Router::into_make_service`] and [`Router::into_make_service_with_connect_info`]
-do this automatically.
+请注意 [`Router::into_make_service`] 和 [`Router::into_make_service_with_connect_info`] 会自动执行此操作。
 
 [`Extension`]: crate::Extension

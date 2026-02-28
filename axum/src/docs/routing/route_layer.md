@@ -1,21 +1,12 @@
-Apply a [`tower::Layer`] to the router that will only run if the request matches
-a route.
+将 [`tower::Layer`] 应用于路由器，仅在请求匹配路由时才会运行。
 
-Note that the middleware is only applied to existing routes. So you have to
-first add your routes (and / or fallback) and then call `route_layer`
-afterwards. Additional routes added after `route_layer` is called will not have
-the middleware added.
+请注意，中间件仅应用于现有的路由。所以你必须先添加路由（和/或 fallback），然后调用 `route_layer`。在 `route_layer` 调用后添加的其他路由将不会添加中间件。
 
-This works similarly to [`Router::layer`] except the middleware will only run if
-the request matches a route. This is useful for middleware that return early
-(such as authorization) which might otherwise convert a `404 Not Found` into a
-`401 Unauthorized`.
+这与 [`Router::layer`] 类似工作，除了中间件仅在请求匹配路由时运行。这对于提前返回的中间件（如授权）有用，否则可能将 `404 Not Found` 转换为 `401 Unauthorized`。
 
-This function will panic if no routes have been declared yet on the router,
-since the new layer will have no effect, and this is typically a bug.
-In generic code, you can test if that is the case first, by calling [`Router::has_routes`].
+如果路由器上尚未声明任何路由，此函数将 panic，因为新层将不起作用，这通常是一个 bug。在通用代码中，你可以通过调用 [`Router::has_routes`] 首先测试是否是这种情况。
 
-# Example
+# 示例
 
 ```rust
 use axum::{
@@ -28,8 +19,8 @@ let app = Router::new()
     .route("/foo", get(|| async {}))
     .route_layer(ValidateRequestHeaderLayer::bearer("password"));
 
-// `GET /foo` with a valid token will receive `200 OK`
-// `GET /foo` with a invalid token will receive `401 Unauthorized`
-// `GET /not-found` with a invalid token will receive `404 Not Found`
+// `GET /foo` 带有有效令牌将接收 `200 OK`
+// `GET /foo` 带有无效令牌将接收 `401 Unauthorized`
+// `GET /not-found` 带有无效令牌将接收 `404 Not Found`
 # let _: Router = app;
 ```

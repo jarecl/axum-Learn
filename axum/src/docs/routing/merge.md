@@ -1,7 +1,6 @@
-Merge the paths and fallbacks of two routers into a single [`Router`].
+将两个路由器的路径和 fallback 合并为单个 [`Router`]。
 
-This is useful for breaking apps into smaller pieces and combining them
-into one.
+这有助于将应用程序分解为更小的部分并将它们组合成一个。
 
 ```rust
 use axum::{
@@ -13,7 +12,7 @@ use axum::{
 # async fn users_show() {}
 # async fn teams_list() {}
 
-// define some routes separately
+// 分别定义一些路由
 let user_routes = Router::new()
     .route("/users", get(users_list))
     .route("/users/{id}", get(users_show));
@@ -21,25 +20,23 @@ let user_routes = Router::new()
 let team_routes = Router::new()
     .route("/teams", get(teams_list));
 
-// combine them into one
+// 将它们合并为一个
 let app = Router::new()
     .merge(user_routes)
     .merge(team_routes);
 
-// could also do `user_routes.merge(team_routes)`
+// 也可以做 `user_routes.merge(team_routes)`
 
-// Our app now accepts
+// 我们的应用现在接受
 // - GET /users
 // - GET /users/{id}
 // - GET /teams
 # let _: Router = app;
 ```
 
-# Merging routers with state
+# 合并带有状态的路由器
 
-When combining [`Router`]s with this method, each [`Router`] must have the
-same type of state. If your routers have different types you can use
-[`Router::with_state`] to provide the state and make the types match:
+使用此方法组合 [`Router`] 时，每个 [`Router`] 必须具有相同类型的状体。如果你的路由器具有不同的类型，可以使用 [`Router::with_state`] 提供状态并使类型匹配：
 
 ```rust
 use axum::{
@@ -54,7 +51,7 @@ struct InnerState {}
 #[derive(Clone)]
 struct OuterState {}
 
-async fn inner_handler(state: State<InnerState>) {}
+async fn inner_handler(state:: State<InnerState>) {}
 
 let inner_router = Router::new()
     .route("/bar", get(inner_handler))
@@ -69,12 +66,10 @@ let app = Router::new()
 # let _: axum::Router = app;
 ```
 
-# Merging routers with fallbacks
+# 合并带有 fallback 的路由器
 
-When combining [`Router`]s with this method, the [fallback](Router::fallback) is also merged.
-However only one of the routers can have a fallback.
+使用此方法组合 [`Router`] 时，[fallback](Router::fallback) 也会被合并。然而只有其中一个路由器可以有 fallback。
 
-# Panics
+# Panic
 
-- If two routers that each have a [fallback](Router::fallback) are merged. This
-  is because `Router` only allows a single fallback.
+- 如果合并两个各自有 [fallback](Router::fallback) 的路由器。这是因为 `Router` 只允许单个 fallback。
