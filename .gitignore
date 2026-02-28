@@ -1,3 +1,10 @@
 target
 .DS_Store
 .vscode
+
+# IDE
+.idea/
+.vs/
+
+# Claude Code
+.claude/
